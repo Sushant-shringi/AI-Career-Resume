@@ -1,11 +1,12 @@
 """
 FastAPI Main Application Entry Point
-Initializes database, CORS middleware, routes, and global health check.
+Initializes database, CORS middleware, routes, health check, and static React frontend.
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.config import settings
 from backend.app.database.session import init_db
@@ -18,7 +19,6 @@ from backend.app.api.suggestions import router as suggestions_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize SQLite tables
     print(f"Initializing SQLite database at: {settings.DATABASE_URL}")
     init_db()
     print("Database initialized successfully.")
@@ -32,7 +32,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for Frontend communication
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -70,10 +70,15 @@ def health_check():
         "vector_store": "ChromaDB (Local Persistent)"
     }
 
-@app.get("/", tags=["Root"])
-def root():
-    return {
-        "message": f"Welcome to {settings.PROJECT_NAME}",
-        "docs_url": "/docs",
-        "health_url": "/api/health"
-    }
+# Mount React Frontend if built
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+else:
+    @app.get("/", tags=["Root"])
+    def root():
+        return {
+            "message": f"Welcome to {settings.PROJECT_NAME}",
+            "docs_url": "/docs",
+            "health_url": "/api/health"
+        }
